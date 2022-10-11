@@ -6,12 +6,11 @@
 idf_component_register(
     SRCS
         "main.cc"
-        "main_functions.cc"
-        "app_camera_esp.c"
+        "camera.c"
         "models/pnet_model_data.cc"
         "models/rnet_model_data.cc"
         "models/onet_model_data.cc"
         "mtcnn.cc"
 
-    PRIV_REQUIRES console tflite-lib esp32-camera screen spi_flash
+    PRIV_REQUIRES console tflite-lib esp32-camera spi_flash
     INCLUDE_DIRS "")

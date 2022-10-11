@@ -13,26 +13,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#include "app_camera_esp.h"
+#include "camera.h"
 
-static const char *TAG = "app_camera";
+static const char *TAG = "camera";
 
-int app_camera_init() {
-#if CONFIG_CAMERA_MODULE_ESP_EYE || CONFIG_CAMERA_MODULE_ESP32_CAM_BOARD
-  /* IO13, IO14 is designed for JTAG by default,
-   * to use it as generalized input,
-   * firstly declare it as pullup input */
-  gpio_config_t conf;
-  conf.mode = GPIO_MODE_INPUT;
-  conf.pull_up_en = GPIO_PULLUP_ENABLE;
-  conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
-  conf.intr_type = GPIO_INTR_DISABLE;
-  conf.pin_bit_mask = 1LL << 13;
-  gpio_config(&conf);
-  conf.pin_bit_mask = 1LL << 14;
-  gpio_config(&conf);
-#endif
-
+int camera_init(void) {
   camera_config_t config;
   config.ledc_channel = LEDC_CHANNEL_0;
   config.ledc_timer = LEDC_TIMER_0;
@@ -67,11 +52,6 @@ int app_camera_init() {
   }
   sensor_t *s = esp_camera_sensor_get();
   s->set_vflip(s, 1); //flip it back
-  //initial sensors are flipped vertically and colors are a bit saturated
-  if (s->id.PID == OV3660_PID)
-  {
-      s->set_brightness(s, 1);  //up the blightness just a bit
-      s->set_saturation(s, -2); //lower the saturation
-  }
+
   return 0;
 }
