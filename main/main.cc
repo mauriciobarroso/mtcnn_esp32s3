@@ -41,12 +41,18 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
-#include "camera.h"
-#include "mtcnn.h"
+#include "sensor.h"
+#include "esp_camera.h"
+#include "esp_log.h"
+#include "esp_system.h"
+#include "driver/ledc.h"
 
-#include "models/pnet_model_data.h"
-#include "models/rnet_model_data.h"
-#include "models/onet_model_data.h"
+#include "utils.h"
+#include "models/pnet_1.c"
+#include "models/pnet_2.c"
+#include "models/pnet_3.c"
+#include "models/rnet.c"
+#include "models/onet.c"
 
 #include "tensorflow/lite/micro/micro_error_reporter.h"
 #include "tensorflow/lite/micro/micro_interpreter.h"
@@ -63,45 +69,69 @@
 /* Private variables ---------------------------------------------------------*/
 static const char * TAG = "app"; /* Tag for debugging */
 
-static uint8_t * tensor_arena;
-tflite::ErrorReporter* error_reporter = nullptr;
-const tflite::Model* pnet_scale_1_model = nullptr;
-const tflite::Model* pnet_scale_2_model = nullptr;
-const tflite::Model * rnet_model = nullptr;
-const tflite::Model * onet_model = nullptr;
-tflite::MicroInterpreter * interpreter_1 = nullptr;
-tflite::MicroInterpreter * interpreter_2 = nullptr;
+tflite::MicroInterpreter * pnet_1_interpreter = nullptr;
+tflite::MicroInterpreter * pnet_2_interpreter = nullptr;
+tflite::MicroInterpreter * pnet_3_interpreter = nullptr;
 tflite::MicroInterpreter * rnet_interpreter = nullptr;
 tflite::MicroInterpreter * onet_interpreter = nullptr;
 
-/* Private function prototypes -----------------------------------------------*/
+/* Private functions declaration ---------------------------------------------*/
+static void tflm_init(void);
+static esp_err_t camera_init(void);
 static void inference_task(void * arg);
 
 /* Private user code ---------------------------------------------------------*/
 extern "C" void app_main() {
-  static tflite::MicroErrorReporter micro_error_reporter;
+	/* Initialize TFLM and allocate tensors for the models */
+	tflm_init();
+
+  /* Initialize Camera */
+  ESP_ERROR_CHECK(camera_init());
+
+	/* Create RTOS tasks to run inferences */
+	xTaskCreate(inference_task,
+			"Inference Task",
+			configMINIMAL_STACK_SIZE * 8,
+			NULL,
+			tskIDLE_PRIORITY + 8,
+			NULL);
+}
+
+/* Private functions definition ----------------------------------------------*/
+static void tflm_init(void) {
+	tflite::ErrorReporter* error_reporter = nullptr;
+  tflite::MicroErrorReporter micro_error_reporter;
   error_reporter = &micro_error_reporter;
 
   /* Map the model into a usable data structure */
-  pnet_scale_1_model = tflite::GetModel(pnet_1_model_data);
-  if (pnet_scale_1_model->version() != TFLITE_SCHEMA_VERSION) {
+  const tflite::Model * pnet_1_model = tflite::GetModel(pnet_1_model_data);
+  if (pnet_1_model->version() != TFLITE_SCHEMA_VERSION) {
     TF_LITE_REPORT_ERROR(error_reporter,
                          "Model provided is schema version %d not equal "
                          "to supported version %d.",
-												 pnet_scale_1_model->version(), TFLITE_SCHEMA_VERSION);
+												 pnet_1_model->version(), TFLITE_SCHEMA_VERSION);
     return;
   }
 
-  pnet_scale_2_model = tflite::GetModel(pnet_2_model_data);
-  if (pnet_scale_2_model->version() != TFLITE_SCHEMA_VERSION) {
+  const tflite::Model * pnet_2_model = tflite::GetModel(pnet_2_model_data);
+  if (pnet_2_model->version() != TFLITE_SCHEMA_VERSION) {
     TF_LITE_REPORT_ERROR(error_reporter,
                          "Model provided is schema version %d not equal "
                          "to supported version %d.",
-												 pnet_scale_2_model->version(), TFLITE_SCHEMA_VERSION);
+												 pnet_2_model->version(), TFLITE_SCHEMA_VERSION);
     return;
   }
 
-  rnet_model = tflite::GetModel(rnet_model_data);
+  const tflite::Model * pnet_3_model = tflite::GetModel(pnet_3_model_data);
+  if (pnet_3_model->version() != TFLITE_SCHEMA_VERSION) {
+    TF_LITE_REPORT_ERROR(error_reporter,
+                         "Model provided is schema version %d not equal "
+                         "to supported version %d.",
+												 pnet_3_model->version(), TFLITE_SCHEMA_VERSION);
+    return;
+  }
+
+  const tflite::Model * rnet_model = tflite::GetModel(rnet_model_data);
   if (rnet_model->version() != TFLITE_SCHEMA_VERSION) {
     TF_LITE_REPORT_ERROR(error_reporter,
                          "Model provided is schema version %d not equal "
@@ -110,7 +140,7 @@ extern "C" void app_main() {
     return;
   }
 
-  onet_model = tflite::GetModel(onet_model_data);
+  const tflite::Model * onet_model = tflite::GetModel(onet_model_data);
   if (rnet_model->version() != TFLITE_SCHEMA_VERSION) {
     TF_LITE_REPORT_ERROR(error_reporter,
                          "Model provided is schema version %d not equal "
@@ -120,9 +150,8 @@ extern "C" void app_main() {
   }
 
   /* Reserve memory */
-  if (tensor_arena == NULL) {
-    tensor_arena = (uint8_t *) heap_caps_malloc(TENSOR_ARENA_SIZE, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-  }
+  uint8_t * tensor_arena = (uint8_t *) heap_caps_malloc(TENSOR_ARENA_SIZE, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+
   if (tensor_arena == NULL) {
     printf("Couldn't allocate memory of %d bytes\n", TENSOR_ARENA_SIZE);
     return;
@@ -147,13 +176,17 @@ extern "C" void app_main() {
   micro_op_resolver.AddSoftmax();
 
   /* Build an interpreter to run the model with */
-  static tflite::MicroInterpreter static_interpreter_1(
-  		pnet_scale_1_model, micro_op_resolver, tensor_arena, TENSOR_ARENA_SIZE, error_reporter);
-  interpreter_1 = &static_interpreter_1;
+  static tflite::MicroInterpreter static_pnet_1_interpreter(
+  		pnet_1_model, micro_op_resolver, tensor_arena, TENSOR_ARENA_SIZE, error_reporter);
+  pnet_1_interpreter = &static_pnet_1_interpreter;
 
-  static tflite::MicroInterpreter static_interpreter_2(
-  		pnet_scale_2_model, micro_op_resolver, tensor_arena, TENSOR_ARENA_SIZE, error_reporter);
-  interpreter_2 = &static_interpreter_2;
+  static tflite::MicroInterpreter static_pnet_2_interpreter(
+  		pnet_2_model, micro_op_resolver, tensor_arena, TENSOR_ARENA_SIZE, error_reporter);
+  pnet_2_interpreter = &static_pnet_2_interpreter;
+
+  static tflite::MicroInterpreter static_pnet_3_interpreter(
+    		pnet_3_model, micro_op_resolver, tensor_arena, TENSOR_ARENA_SIZE, error_reporter);
+    pnet_3_interpreter = &static_pnet_3_interpreter;
 
   static tflite::MicroInterpreter static_rnet_interpreter(
   		rnet_model, micro_op_resolver, tensor_arena, TENSOR_ARENA_SIZE, error_reporter);
@@ -164,17 +197,23 @@ extern "C" void app_main() {
   onet_interpreter = &static_onet_interpreter;
 
   /* Allocate memory from the tensor_arena for the model's tensors */
-  TfLiteStatus allocate_status = interpreter_1->AllocateTensors();
+  TfLiteStatus allocate_status = pnet_1_interpreter->AllocateTensors();
   if (allocate_status != kTfLiteOk) {
     TF_LITE_REPORT_ERROR(error_reporter, "AllocateTensors() failed");
     return;
   }
 
-  allocate_status = interpreter_2->AllocateTensors();
+  allocate_status = pnet_2_interpreter->AllocateTensors();
   if (allocate_status != kTfLiteOk) {
     TF_LITE_REPORT_ERROR(error_reporter, "AllocateTensors() failed");
     return;
   }
+
+  allocate_status = pnet_3_interpreter->AllocateTensors();
+	if (allocate_status != kTfLiteOk) {
+		TF_LITE_REPORT_ERROR(error_reporter, "AllocateTensors() failed");
+		return;
+	}
 
   allocate_status = rnet_interpreter->AllocateTensors();
   if (allocate_status != kTfLiteOk) {
@@ -187,21 +226,48 @@ extern "C" void app_main() {
     TF_LITE_REPORT_ERROR(error_reporter, "AllocateTensors() failed");
     return;
   }
+}
 
-  /* Initialize Camera */
-  int ret = camera_init();
-  if (ret != 0) {
-    TF_LITE_REPORT_ERROR(error_reporter, "Camera init failed\n");
+static esp_err_t camera_init(void) {
+	esp_err_t ret = ESP_OK;
+
+  camera_config_t config;
+  config.ledc_channel = LEDC_CHANNEL_0;
+  config.ledc_timer = LEDC_TIMER_0;
+  config.pin_d0 = 11;
+  config.pin_d1 = 9;
+  config.pin_d2 = 8;
+  config.pin_d3 = 10;
+  config.pin_d4 = 12;
+  config.pin_d5 = 18;
+  config.pin_d6 = 17;
+  config.pin_d7 = 16;
+  config.pin_xclk = 15;
+  config.pin_pclk = 13;
+  config.pin_vsync = 6;
+  config.pin_href = 7;
+  config.pin_sccb_sda = 4;
+  config.pin_sccb_scl = 5;
+  config.pin_pwdn = -1;
+  config.pin_reset = -1;
+  config.xclk_freq_hz = 15000000;
+  config.pixel_format = PIXFORMAT_RGB565;
+  config.frame_size = CAM_FRAMESIZE;
+  config.jpeg_quality = 10;
+  config.fb_count = 2;
+  config.fb_location = CAMERA_FB_IN_PSRAM;
+
+  /* Camera initialization */
+  ret = esp_camera_init(&config);
+  if (ret != ESP_OK) {
+    ESP_LOGE(TAG, "Camera initialization failed");
+    return ret;
   }
-  TF_LITE_REPORT_ERROR(error_reporter, "Camera Initialized\n");
 
-	/* Create RTOS tasks */
-	xTaskCreate(inference_task,
-			"Inference Task",
-			configMINIMAL_STACK_SIZE * 8,
-			NULL,
-			tskIDLE_PRIORITY + 8,
-			NULL);
+  sensor_t * s = esp_camera_sensor_get();
+  s->set_vflip(s, 1); /* flip it back */
+
+  return ret;
 }
 
 static void inference_task(void * arg) {
@@ -211,11 +277,11 @@ static void inference_task(void * arg) {
 		/* Get image */
 	  camera_fb_t* fb = esp_camera_fb_get();
 	  if (!fb) {
-	    ESP_LOGE("camera", "Camera capture failed");
+	    ESP_LOGE(TAG, "Camera capture failed");
 	  }
 
 		/* Convert to RGB888 and return frame buffer*/
-	  uint8_t * rgb888_image = (uint8_t *)malloc((IMG_WIDTH * IMG_HEIGHT * 3) * sizeof(uint8_t));
+	  uint8_t * rgb888_image = (uint8_t *)malloc((IMG_W * IMG_H * IMG_CH) * sizeof(uint8_t));
 	  fmt2rgb888(fb->buf, fb->len, PIXFORMAT_RGB565, rgb888_image);
 	  esp_camera_fb_return(fb);
 
@@ -224,8 +290,9 @@ static void inference_task(void * arg) {
 	  pnet_candidate_windows.candidate_window = NULL;
 	  pnet_candidate_windows.len = 0;
 
-	  run_pnet(&pnet_candidate_windows, interpreter_1, rgb888_image, IMG_WIDTH, IMG_HEIGHT, SCALE_1);
-	  run_pnet(&pnet_candidate_windows, interpreter_2, rgb888_image, IMG_WIDTH, IMG_HEIGHT, SCALE_2);
+	  run_pnet(&pnet_candidate_windows, pnet_1_interpreter, rgb888_image, IMG_W, IMG_H, PNET_1_SCALE);
+	  run_pnet(&pnet_candidate_windows, pnet_2_interpreter, rgb888_image, IMG_W, IMG_H, PNET_2_SCALE);
+	  run_pnet(&pnet_candidate_windows, pnet_3_interpreter, rgb888_image, IMG_W, IMG_H, PNET_3_SCALE);
 	  nms(&pnet_candidate_windows, NMS_THRESHOLD, IOU_MODE);
 
 	  bboxes_t * pnet_bboxes;
@@ -233,10 +300,10 @@ static void inference_task(void * arg) {
 	  free(pnet_candidate_windows.candidate_window);
 
 	  square_boxes(pnet_bboxes);
-	  correct_boxes(pnet_bboxes, IMG_WIDTH, IMG_HEIGHT);
+	  correct_boxes(pnet_bboxes, IMG_W, IMG_H);
 
-	  long long total_time = (esp_timer_get_time() - start_time);
-	  printf("Total time for P-Net = %lld\n", total_time / 1000);
+	  long long pnet_time = (esp_timer_get_time() - start_time);
+	  printf("Time for P-Net = %lld\n", pnet_time / 1000);
 	  printf("Ouput bboxes:%d\n", pnet_bboxes->len);
 
 	  /* Run R-Net */
@@ -246,7 +313,7 @@ static void inference_task(void * arg) {
 	  rnet_candidate_windows.candidate_window = NULL;
 	  rnet_candidate_windows.len = 0;
 
-	  run_rnet(&rnet_candidate_windows, rnet_interpreter, rgb888_image, IMG_WIDTH, IMG_HEIGHT, pnet_bboxes);
+	  run_rnet(&rnet_candidate_windows, rnet_interpreter, rgb888_image, IMG_W, IMG_H, pnet_bboxes);
 	  free(pnet_bboxes->bbox);
 	  free(pnet_bboxes);
 	  nms(&rnet_candidate_windows, NMS_THRESHOLD, IOU_MODE);
@@ -256,10 +323,10 @@ static void inference_task(void * arg) {
 	  free(rnet_candidate_windows.candidate_window);
 
 	  square_boxes(rnet_bboxes);
-	  correct_boxes(rnet_bboxes, IMG_WIDTH, IMG_HEIGHT);
+	  correct_boxes(rnet_bboxes, IMG_W, IMG_H);
 
-		total_time = (esp_timer_get_time() - start_time);
-		printf("Total time for R-Net = %lld\n", total_time / 1000);
+	  long long rnet_time = (esp_timer_get_time() - start_time);
+		printf("Time for R-Net = %lld\n", rnet_time / 1000);
 		printf("Ouput bboxes:%d\n", rnet_bboxes->len);
 
 	  /* Run O-Net */
@@ -269,7 +336,7 @@ static void inference_task(void * arg) {
 	  onet_candidate_windows.candidate_window = NULL;
 	  onet_candidate_windows.len = 0;
 
-	  run_onet(&onet_candidate_windows, onet_interpreter, rgb888_image, IMG_WIDTH, IMG_HEIGHT, rnet_bboxes);
+	  run_onet(&onet_candidate_windows, onet_interpreter, rgb888_image, IMG_W, IMG_H, rnet_bboxes);
 	  free(rnet_bboxes->bbox);
 	  free(rnet_bboxes);
 	  nms(&onet_candidate_windows, NMS_THRESHOLD, IOU_MODE);
@@ -279,18 +346,19 @@ static void inference_task(void * arg) {
 	  free(onet_candidate_windows.candidate_window);
 
 	  square_boxes(onet_bboxes);
-	  correct_boxes(onet_bboxes, IMG_WIDTH, IMG_HEIGHT);
+	  correct_boxes(onet_bboxes, IMG_W, IMG_H);
 
-		total_time = (esp_timer_get_time() - start_time);
-		printf("Total time for O-Net = %lld\n", total_time / 1000);
+	  long long onet_time = (esp_timer_get_time() - start_time);
+		printf("Time for O-Net = %lld\n", onet_time / 1000);
 		printf("Ouput bboxes:%d\n", onet_bboxes->len);
 
 		/* Print final results */
-	  draw_rectangle_rgb888(rgb888_image, onet_bboxes, IMG_WIDTH);
+	  draw_rectangle_rgb888(rgb888_image, onet_bboxes, IMG_W);
 	  free(onet_bboxes->bbox);
 	  free(onet_bboxes);
-	  print_rgb888(rgb888_image, IMG_WIDTH, IMG_HEIGHT);
+	  print_rgb888(rgb888_image, IMG_W, IMG_H);
 
+	  printf("MTCNN time = %lld\n\n", (pnet_time + rnet_time + onet_time) / 1000);
 
 	  free(rgb888_image);
 	  vTaskDelay(pdMS_TO_TICKS(20)); /* To avoid watchdog */
