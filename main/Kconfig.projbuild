@@ -1,34 +1,7 @@
-menu  "Application Configuration"
+menu  "App Configuration"
 menu "Camera Configuration"
 
-choice CAMERA_MODULE
-    bool "Select Camera Pinout"
-    default CAMERA_MODULE_WROVER_KIT
-    help
-        Select Camera Pinout.
-
-    config CAMERA_MODULE_WROVER_KIT
-        bool "WROVER-KIT With OV2640 Module"
-    config CAMERA_MODULE_ESP_EYE
-        bool "ESP-EYE DevKit"
-    config CAMERA_MODULE_ESP_S2_KALUGA
-        bool "ESP32-S2-Kaluga-1 V1.3"
-    config CAMERA_MODULE_ESP_S3_EYE
-        bool "ESP-S3-EYE DevKit"
-    config CAMERA_MODULE_ESP32_CAM_BOARD
-        bool "ESP32 Camera Development Board"
-    config CAMERA_MODULE_M5STACK_PSRAM
-        bool "M5Stack Camera With PSRAM"
-    config CAMERA_MODULE_M5STACK_WIDE
-        bool "M5Stack Camera F (Wide)"
-    config CAMERA_MODULE_AI_THINKER
-        bool "ESP32-CAM by AI-Thinker"
-    config CAMERA_MODULE_CUSTOM
-        bool "Custom Camera Pinout"
-endchoice
-
 config CAMERA_PIN_PWDN
-    depends on CAMERA_MODULE_CUSTOM
     int "Power Down pin"
     range -1 33
     default -1
@@ -36,7 +9,6 @@ config CAMERA_PIN_PWDN
         Select Power Down pin or -1 for unmanaged.
 
 config CAMERA_PIN_RESET
-    depends on CAMERA_MODULE_CUSTOM
     int "Reset pin"
     range -1 33
     default -1
@@ -44,119 +16,116 @@ config CAMERA_PIN_RESET
         Select Camera Reset pin or -1 for software reset.
 
 config CAMERA_PIN_XCLK
-    depends on CAMERA_MODULE_CUSTOM
     int "XCLK pin"
     range 0 33
-    default 21
+    default 15
     help
         Select Camera XCLK pin.
 
 config CAMERA_PIN_SIOD
-    depends on CAMERA_MODULE_CUSTOM
     int "SIOD pin"
     range 0 33
-    default 26
+    default 4
     help
         Select Camera SIOD pin.
 
 config CAMERA_PIN_SIOC
-    depends on CAMERA_MODULE_CUSTOM
     int "SIOC pin"
     range 0 33
-    default 27
+    default 5
     help
         Select Camera SIOC pin.
 
 config CAMERA_PIN_VSYNC
-    depends on CAMERA_MODULE_CUSTOM
     int "VSYNC pin"
     range 0 39
-    default 25
+    default 6
     help
         Select Camera VSYNC pin.
 
 config CAMERA_PIN_HREF
-    depends on CAMERA_MODULE_CUSTOM
     int "HREF pin"
     range 0 39
-    default 23
+    default 7
     help
         Select Camera HREF pin.
 
 config CAMERA_PIN_PCLK
-    depends on CAMERA_MODULE_CUSTOM
     int "PCLK pin"
     range 0 39
-    default 25
+    default 13
     help
         Select Camera PCLK pin.
 
-config CAMERA_PIN_Y2
-    depends on CAMERA_MODULE_CUSTOM
-    int "Y2 pin"
+config CAMERA_PIN_D0
+    int "D0 pin"
     range 0 39
-    default 4
+    default 11
     help
-        Select Camera Y2 pin.
-
-config CAMERA_PIN_Y3
-    depends on CAMERA_MODULE_CUSTOM
-    int "Y3 pin"
+        Select Camera D0 pin.
+        
+config CAMERA_PIN_D1
+    int "D1 pin"
     range 0 39
-    default 5
+    default 9
     help
-        Select Camera Y3 pin.
+        Select Camera D1 pin.
 
-config CAMERA_PIN_Y4
-    depends on CAMERA_MODULE_CUSTOM
-    int "Y4 pin"
+config CAMERA_PIN_D2
+    int "D2 pin"
+    range 0 39
+    default 8
+    help
+        Select Camera D2 pin.
+
+config CAMERA_PIN_D3
+    int "D3 pin"
+    range 0 39
+    default 10
+    help
+        Select Camera D3 pin.
+
+config CAMERA_PIN_D4
+    int "D4 pin"
+    range 0 39
+    default 12
+    help
+        Select Camera D4 pin.
+
+config CAMERA_PIN_D5
+    int "D5 pin"
     range 0 39
     default 18
     help
-        Select Camera Y4 pin.
+        Select Camera D5 pin.
 
-config CAMERA_PIN_Y5
-    depends on CAMERA_MODULE_CUSTOM
-    int "Y5 pin"
+config CAMERA_PIN_D6
+    int "D6 pin"
     range 0 39
-    default 19
+    default 17
     help
-        Select Camera Y5 pin.
+        Select Camera D6 pin.
 
-config CAMERA_PIN_Y6
-    depends on CAMERA_MODULE_CUSTOM
-    int "Y6 pin"
+config CAMERA_PIN_D7
+    int "D7 pin"
     range 0 39
-    default 36
+    default 16
     help
-        Select Camera Y6 pin.
+        Select Camera D7 pin.
 
-config CAMERA_PIN_Y7
-    depends on CAMERA_MODULE_CUSTOM
-    int "Y7 pin"
-    range 0 39
-    default 39
-    help
-        Select Camera Y7 pin.
-
-config CAMERA_PIN_Y8
-    depends on CAMERA_MODULE_CUSTOM
-    int "Y8 pin"
+config CAMERA_PIN_D8
+    int "D8 pin"
     range 0 39
     default 34
     help
-        Select Camera Y8 pin.
+        Select Camera D8 pin.
 
-config CAMERA_PIN_Y9
-    depends on CAMERA_MODULE_CUSTOM
-    int "Y9 pin"
+config CAMERA_PIN_D9
+    int "D9 pin"
     range 0 39
     default 35
     help
-        Select Camera Y9 pin.
+        Select Camera D9 pin.
 endmenu
 
-menu "Display support"
-
-endmenu
 endmenu
