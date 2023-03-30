@@ -52,7 +52,17 @@ Mkfile.old
 dkms.conf
 /build/
 
+# ESP-IDF
+build/
+managed_components/
+esp_idf_components/
 sdkconfig
-*.cproject
-*.project
+sdkconfig.old
 dependencies.lock
+
+# Eclipse
+.project
+.cproject
+
+# Mac
+.DS_Store
