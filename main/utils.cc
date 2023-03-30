@@ -33,7 +33,7 @@
   */
 
 /* Includes ------------------------------------------------------------------*/
-#include "mtcnn.h"
+#include "utils.h"
 
 /* Private macro -------------------------------------------------------------*/
 
@@ -94,12 +94,21 @@ void get_pnet_boxes(bboxes_t ** bboxes, uint16_t width, uint16_t height, float s
 
     (* bboxes)->len = cols * rows;
 
+//    printf("Scale: %f\n", scale);
+//    printf("Len: %d\n", cols * rows);
+
     for(uint16_t i = 0; i < (* bboxes)->len; i++) {
-        (* bboxes)->bbox[i].x1 = ceil((float)(2 * (i % cols) + 1) / scale);
-        (* bboxes)->bbox[i].y1 = ceil((float)(2 * (i / cols) + 1) / scale);
-        (* bboxes)->bbox[i].x2 = ceil((float)(2 * (i % cols) + 1 + 12) / scale);
-        (* bboxes)->bbox[i].y2 = ceil((float)(2 * (i / cols) + 1 + 12) / scale);
+			(* bboxes)->bbox[i].x1 = ceil((float)(2 * (i % cols) + 1) / scale);
+			(* bboxes)->bbox[i].y1 = ceil((float)(2 * (i / cols) + 1) / scale);
+			(* bboxes)->bbox[i].x2 = ceil((float)(2 * (i % cols) + 1 + 12) / scale);
+			(* bboxes)->bbox[i].y2 = ceil((float)(2 * (i / cols) + 1 + 12) / scale);
+
+			/* todo: test */
+//			printf("x1:%f, y1:%f\n", (* bboxes)->bbox[i].x1, (* bboxes)->bbox[i].y1);
+//			printf("x2:%f, y2:%f\r\n", (* bboxes)->bbox[i].x2, (* bboxes)->bbox[i].y2);
     }
+
+//    printf("\r\n");
 }
 
 void add_candidate_windows(candidate_windows_t * candidate_windows, float * scores, float * offsets, bboxes_t * bboxes, float threshold) {
@@ -220,13 +229,27 @@ void get_calibrated_boxes(bboxes_t ** bboxes, candidate_windows_t * candidate_wi
         uint16_t w = get_width(&(* bboxes)->bbox[i]);
         uint16_t h = get_height(&(* bboxes)->bbox[i]);
 
-        (* bboxes)->bbox[i].x1 += w * candidate_windows->candidate_window[i].offsets.x1;
-        (* bboxes)->bbox[i].y1 += h * candidate_windows->candidate_window[i].offsets.y1;
-        (* bboxes)->bbox[i].x2 += w * candidate_windows->candidate_window[i].offsets.x2;
-        (* bboxes)->bbox[i].y2 += h * candidate_windows->candidate_window[i].offsets.y2;
+        if (candidate_windows->candidate_window[i].offsets.x1 > 1.0) {
+        	candidate_windows->candidate_window[i].offsets.x1 = 0;
+        }
+        if (candidate_windows->candidate_window[i].offsets.y1 > 1.0) {
+        	candidate_windows->candidate_window[i].offsets.y1 = 0;
+        }
+        if (candidate_windows->candidate_window[i].offsets.x2 > 1.0) {
+        	candidate_windows->candidate_window[i].offsets.x2 = 0;
+        }
+        if (candidate_windows->candidate_window[i].offsets.y2 > 1.0) {
+        	candidate_windows->candidate_window[i].offsets.y2 = 0;
+        }
+
+			(* bboxes)->bbox[i].x1 += w * candidate_windows->candidate_window[i].offsets.x1;
+			(* bboxes)->bbox[i].y1 += h * candidate_windows->candidate_window[i].offsets.y1;
+			(* bboxes)->bbox[i].x2 += w * candidate_windows->candidate_window[i].offsets.x2;
+			(* bboxes)->bbox[i].y2 += h * candidate_windows->candidate_window[i].offsets.y2;
+
+
     }
 
-    // return bboxes;
 }
 
 void square_boxes(bboxes_t * bboxes) {
@@ -239,6 +262,16 @@ void square_boxes(bboxes_t * bboxes) {
         bboxes->bbox[i].y1 += (h * 0.5) - (max_side * 0.5);
         bboxes->bbox[i].x2 = bboxes->bbox[i].x1 + max_side - 1.0;
         bboxes->bbox[i].y2 = bboxes->bbox[i].y1 + max_side - 1.0;
+
+        /* todo: erase? */
+				if (bboxes->bbox[i].x1 > IMG_W) {
+					printf("Square\n");
+					printf("error x1:%f\n", bboxes->bbox[i].x1);
+				}
+				if (bboxes->bbox[i].y1 > IMG_H) {
+					printf("Square\n");
+					printf("error y1:%f\n", bboxes->bbox[i].y1);
+				}
     }
 }
 
@@ -263,6 +296,16 @@ void correct_boxes(bboxes_t * bboxes, uint16_t w, uint16_t h) {
         if(bboxes->bbox[i].y1 < 0) {
             bboxes->bbox[i].y1 = 0;
         }
+
+        /* todo: erase? */
+				if ((uint16_t)bboxes->bbox[i].x1 > IMG_W) {
+					printf("Correct\n");
+					printf("error x1:%f\n", bboxes->bbox[i].x1);
+				}
+				if ((uint16_t)bboxes->bbox[i].y1 > IMG_H) {
+					printf("Correct\n");
+					printf("error y1:%f\n", bboxes->bbox[i].y1);
+				}
     }
 }
 
@@ -450,6 +493,8 @@ void run_pnet(candidate_windows_t * candidate_windows, tflite::MicroInterpreter 
 	add_candidate_windows(candidate_windows, probs->data.f, offsets->data.f, bboxes, PNET_THRESHOLD);
 	free(bboxes->bbox);
 	free(bboxes);
+
+//	print_candidate_windows(candidate_windows);
 }
 
 void run_rnet(candidate_windows_t * candidate_windows, tflite::MicroInterpreter * interpreter, uint8_t * img, uint16_t w, uint16_t h, bboxes_t * bboxes) {
@@ -460,6 +505,8 @@ void run_rnet(candidate_windows_t * candidate_windows, tflite::MicroInterpreter 
 		/* Width and height for the crop image */
 		uint16_t wc = get_width(&bboxes->bbox[i]);
 		uint16_t hc = get_height(&bboxes->bbox[i]);
+
+
 
 		uint8_t * imgc = (uint8_t *)malloc(wc * hc * 3 * sizeof(uint8_t));
 		crop_rgb888_img(img, imgc, w, &bboxes->bbox[i]);
@@ -503,10 +550,13 @@ void run_onet(candidate_windows_t * candidate_windows, tflite::MicroInterpreter 
   float probs_buf[bboxes->len * 2];
   float offsets_buf[bboxes->len * 4];
 
-	for(uint8_t i = 0; i < bboxes->len; i++) {
+	for (uint8_t i = 0; i < bboxes->len; i++) {
 		/* Width and height for the crop image */
 		uint16_t wc = get_width(&bboxes->bbox[i]);
 		uint16_t hc = get_height(&bboxes->bbox[i]);
+//		printf("x1:%f, x2:%f, y1:%f, y2:%f\r\n", bboxes->bbox[i].x1, bboxes->bbox[i].x2, bboxes->bbox[i].y1, bboxes->bbox[i].y2);
+//
+//		printf("wc=%d, hc=%d\r\n", wc, hc);
 
 		uint8_t * imgc = (uint8_t *)malloc(wc * hc * 3 * sizeof(uint8_t));
 		crop_rgb888_img(img, imgc, w, &bboxes->bbox[i]);

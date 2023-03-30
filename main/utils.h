@@ -48,22 +48,18 @@ extern "C" {
 #include <stdint.h>
 #include <math.h>
 #include <string.h>
+#include "models/models_settings.h"
 
 /* Exported macro ------------------------------------------------------------*/
-#define IMG_WIDTH				96
-#define IMG_HEIGHT			96
-#define SCALE_1					0.3333333f
-#define SCALE_2					0.1666667f
-
 #define PNET_SIZE				12
 #define RNET_SIZE				24
 #define ONET_SIZE				48
 
-#define PNET_THRESHOLD  0.6
-#define RNET_THRESHOLD  0.6
+#define PNET_THRESHOLD  0.7
+#define RNET_THRESHOLD  0.7
 #define ONET_THRESHOLD  0.75
 
-#define NMS_THRESHOLD   0.7
+#define NMS_THRESHOLD   0.5
 
 #define IMG_MIN(A, B) ((A) < (B) ? (A) : (B))
 #define IMG_MAX(A, B) ((A) < (B) ? (B) : (A))
@@ -111,10 +107,10 @@ void correct_boxes(bboxes_t * bboxes, uint16_t w, uint16_t h);
 void draw_rectangle_rgb888(uint8_t * buf, bboxes_t * bboxes, int width);
 void print_rgb888(uint8_t * img, int width, int height);
 void crop_rgb888_img(uint8_t * src, uint8_t * dst, uint16_t width, coordinates_t * coordinates);
-void image_zoom_in_twice(uint8_t *dimage, int dw, int dh, int dc, uint8_t *simage, int sw,int sc);
+void image_zoom_in_twice(uint8_t * dimage, int dw, int dh, int dc, uint8_t * simage, int sw,int sc);
 void image_resize_linear(uint8_t * dst_image, uint8_t * src_image, int dst_w, int dst_h, int dst_c, int src_w, int src_h);
 
-/* mtcnn */
+/* MTCNN */
 void run_pnet(candidate_windows_t * candidate_windows, tflite::MicroInterpreter * interpreter, uint8_t * img, uint16_t w, uint16_t h, float scale);
 void run_rnet(candidate_windows_t * candidate_windows, tflite::MicroInterpreter * interpreter, uint8_t * img, uint16_t w, uint16_t h, bboxes_t * bboxes);
 void run_onet(candidate_windows_t * candidate_windows, tflite::MicroInterpreter * interpreter, uint8_t * img, uint16_t w, uint16_t h, bboxes_t * bboxes);
