@@ -25,6 +25,7 @@ limitations under the License.
 #include "tensorflow/lite/kernels/kernel_util.h"
 #include "tensorflow/lite/kernels/padding.h"
 #include "tensorflow/lite/micro/kernels/kernel_util.h"
+#include "tensorflow/lite/micro/micro_log.h"
 
 #include <esp_timer.h>
 
@@ -330,13 +331,13 @@ TfLiteStatus Eval(TfLiteContext* context, TfLiteNode* node) {
   }
   long long time_this_instance = esp_timer_get_time() - start_time;
   conv_total_time += time_this_instance;
-  //printf("time this instance: %llu\n", time_this_instance / 1000);
+  // printf("time this conv instance: %llu\n", time_this_instance / 1000);
   return kTfLiteOk;
 }
 
 }  // namespace
 
-TfLiteRegistration Register_CONV_2D() {
+TfLiteRegistration_V1 Register_CONV_2D() {
   return tflite::micro::RegisterOp(Init, Prepare, Eval);
 }
 

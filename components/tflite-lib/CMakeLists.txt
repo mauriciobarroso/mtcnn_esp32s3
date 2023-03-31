@@ -14,6 +14,11 @@ file(GLOB srcs_micro
 file(GLOB src_micro_frontend
           "${tfmicro_frontend_dir}/*.c"
           "${tfmicro_frontend_dir}/*.cc")
+
+file(GLOB srcs_tflite_bridge
+          "${tfmicro_dir}/tflite_bridge/*.c"
+          "${tfmicro_dir}/tflite_bridge/*.cc")
+
 file(GLOB srcs_kernels
           "${tfmicro_kernels_dir}/*.c"
           "${tfmicro_kernels_dir}/*.cc")
@@ -34,6 +39,7 @@ FILE(GLOB esp_nn_kernels
 set(lib_srcs
           "${srcs_micro}"
           "${srcs_kernels}"
+          "${srcs_tflite_bridge}"
           "${esp_nn_kernels}"
           "${src_micro_frontend}"
           "${tflite_dir}/kernels/kernel_util.cc"
@@ -43,12 +49,15 @@ set(lib_srcs
           "${tflite_dir}/micro/arena_allocator/persistent_arena_buffer_allocator.cc"
           "${tflite_dir}/micro/arena_allocator/recording_single_arena_buffer_allocator.cc"
           "${tflite_dir}/micro/arena_allocator/single_arena_buffer_allocator.cc"
-          "${tflite_dir}/c/common.cc"
+          "${tflite_dir}/core/c/common.cc"
           "${tflite_dir}/core/api/error_reporter.cc"
           "${tflite_dir}/core/api/flatbuffer_conversions.cc"
           "${tflite_dir}/core/api/op_resolver.cc"
           "${tflite_dir}/core/api/tensor_utils.cc"
           "${tflite_dir}/kernels/internal/quantization_util.cc"
+          "${tflite_dir}/kernels/internal/portable_tensor_utils.cc"
+          "${tflite_dir}/kernels/internal/tensor_utils.cc"
+          "${tflite_dir}/kernels/internal/reference/portable_tensor_utils.cc"
           "${tflite_dir}/schema/schema_utils.cc")
 
 set(priv_req esp-nn)
@@ -73,8 +82,14 @@ target_compile_options(${COMPONENT_LIB} PRIVATE
   -Wno-missing-field-initializers
   -Wno-error=sign-compare
   -Wno-error=double-promotion
-  -DESP_NN # enables ESP-NN optimizations by Espressif
   -Wno-type-limits)
+
+if("${IDF_VERSION_MAJOR}.${IDF_VERSION_MINOR}" VERSION_GREATER_EQUAL "5.0")
+  target_compile_options(${COMPONENT_LIB} PRIVATE -Wno-error=stringop-overread)
+endif()
+
+ # enable ESP-NN optimizations by Espressif
+target_compile_options(${COMPONENT_LIB} PRIVATE -DESP_NN)
 
 target_compile_options(${COMPONENT_LIB} PRIVATE -fno-unwind-tables -ffunction-sections -fdata-sections -fmessage-length=0 -DTF_LITE_STATIC_MEMORY -DTF_LITE_DISABLE_X86_NEON -O3 -Wsign-compare -Wdouble-promotion -Wshadow -Wunused-variable -Wmissing-field-initializers -Wunused-function -Wswitch -Wvla -Wall -Wextra -Wstrict-aliasing -Wno-unused-parameter -Wno-nonnull)
 target_compile_options(${COMPONENT_LIB} PRIVATE $<$<COMPILE_LANGUAGE:CXX>: -std=c++11 -fno-rtti -fno-exceptions -fno-threadsafe-statics -fno-unwind-tables -ffunction-sections -fdata-sections -fmessage-length=0 -DTF_LITE_STATIC_MEMORY -DTF_LITE_DISABLE_X86_NEON -O3 -Werror -Wsign-compare -Wdouble-promotion -Wshadow -Wunused-variable -Wmissing-field-initializers -Wunused-function -Wswitch -Wvla -Wall -Wextra -Wstrict-aliasing -Wno-unused-parameter -Wno-return-type -Wno-strict-aliasing -std=gnu++14 >)

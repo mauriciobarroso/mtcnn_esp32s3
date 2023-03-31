@@ -24,7 +24,7 @@ limitations under the License.
 #include "tensorflow/lite/kernels/kernel_util.h"
 #include "tensorflow/lite/micro/kernels/kernel_util.h"
 #include "tensorflow/lite/micro/memory_helpers.h"
-#include "tensorflow/lite/micro/micro_error_reporter.h"
+#include "tensorflow/lite/micro/micro_log.h"
 
 #if ESP_NN
 #include <esp_nn.h>
@@ -117,7 +117,7 @@ TfLiteStatus MulEval(TfLiteContext* context, TfLiteNode* node) {
   return kTfLiteOk;
 }
 
-TfLiteRegistration Register_MUL() {
+TfLiteRegistration_V1 Register_MUL() {
   return tflite::micro::RegisterOp(MulInit, MulPrepare, MulEval);
 }
 
