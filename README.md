@@ -50,7 +50,7 @@ In the other hand, the post-process consist of three steps, apply NMS to combine
 
 All the prrocesses detailed before and the models for TensorFlow, TensorFlow Lite and TensorFlow Lite Micro were developed in the next Google Colab notebook.
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/mauriciobarroso/mtcnn_esp32s3/blob/main/mtcnn.ipynb)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/mauriciobarroso/mtcnn_esp32s3/blob/main/models_evaluation.ipynb)
 
 ## Deploying to ESP32-S3
 The last step of model development show the creation of the .c files for all MTCNN models and the .h file for the models settings, which are located in ``main/models/``. The preprocess and postprocess functions that are required for the MTCNN pipeline were implemented in using C/C++ in the files ``utils.cc`` and ``utils.h``, which are located in ``main/``.
