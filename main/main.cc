@@ -54,7 +54,6 @@
 #include "models/rnet.c"
 #include "models/onet.c"
 
-#include "tensorflow/lite/micro/micro_error_reporter.h"
 #include "tensorflow/lite/micro/micro_interpreter.h"
 #include "tensorflow/lite/micro/micro_mutable_op_resolver.h"
 #include "tensorflow/lite/micro/all_ops_resolver.h"
@@ -99,53 +98,43 @@ extern "C" void app_main() {
 
 /* Private functions definition ----------------------------------------------*/
 static void tflm_init(void) {
-	tflite::ErrorReporter* error_reporter = nullptr;
-  tflite::MicroErrorReporter micro_error_reporter;
-  error_reporter = &micro_error_reporter;
+//	tflite::ErrorReporter* error_reporter = nullptr;
+//  tflite::MicroErrorReporter micro_error_reporter;
+//  error_reporter = &micro_error_reporter;
 
   /* Map the model into a usable data structure */
   const tflite::Model * pnet_1_model = tflite::GetModel(pnet_1_model_data);
   if (pnet_1_model->version() != TFLITE_SCHEMA_VERSION) {
-    TF_LITE_REPORT_ERROR(error_reporter,
-                         "Model provided is schema version %d not equal "
-                         "to supported version %d.",
-												 pnet_1_model->version(), TFLITE_SCHEMA_VERSION);
+    MicroPrintf("Model provided is schema version %d not equal to supported "
+    		"version %d.", pnet_1_model->version(), TFLITE_SCHEMA_VERSION);
     return;
   }
 
   const tflite::Model * pnet_2_model = tflite::GetModel(pnet_2_model_data);
   if (pnet_2_model->version() != TFLITE_SCHEMA_VERSION) {
-    TF_LITE_REPORT_ERROR(error_reporter,
-                         "Model provided is schema version %d not equal "
-                         "to supported version %d.",
-												 pnet_2_model->version(), TFLITE_SCHEMA_VERSION);
+    MicroPrintf("Model provided is schema version %d not equal to supported "
+    		"version %d.", pnet_2_model->version(), TFLITE_SCHEMA_VERSION);
     return;
   }
 
   const tflite::Model * pnet_3_model = tflite::GetModel(pnet_3_model_data);
   if (pnet_3_model->version() != TFLITE_SCHEMA_VERSION) {
-    TF_LITE_REPORT_ERROR(error_reporter,
-                         "Model provided is schema version %d not equal "
-                         "to supported version %d.",
-												 pnet_3_model->version(), TFLITE_SCHEMA_VERSION);
+    MicroPrintf("Model provided is schema version %d not equal to supported "
+    		"version %d.", pnet_3_model->version(), TFLITE_SCHEMA_VERSION);
     return;
   }
 
   const tflite::Model * rnet_model = tflite::GetModel(rnet_model_data);
   if (rnet_model->version() != TFLITE_SCHEMA_VERSION) {
-    TF_LITE_REPORT_ERROR(error_reporter,
-                         "Model provided is schema version %d not equal "
-                         "to supported version %d.",
-												 rnet_model->version(), TFLITE_SCHEMA_VERSION);
+    MicroPrintf("Model provided is schema version %d not equal to supported "
+    		"version %d.", rnet_model->version(), TFLITE_SCHEMA_VERSION);
     return;
   }
 
   const tflite::Model * onet_model = tflite::GetModel(onet_model_data);
   if (rnet_model->version() != TFLITE_SCHEMA_VERSION) {
-    TF_LITE_REPORT_ERROR(error_reporter,
-                         "Model provided is schema version %d not equal "
-                         "to supported version %d.",
-												 onet_model->version(), TFLITE_SCHEMA_VERSION);
+    MicroPrintf("Model provided is schema version %d not equal to supported "
+    		"version %d.", onet_model->version(), TFLITE_SCHEMA_VERSION);
     return;
   }
 
@@ -177,53 +166,53 @@ static void tflm_init(void) {
 
   /* Build an interpreter to run the model with */
   static tflite::MicroInterpreter static_pnet_1_interpreter(
-  		pnet_1_model, micro_op_resolver, tensor_arena, TENSOR_ARENA_SIZE, error_reporter);
+  		pnet_1_model, micro_op_resolver, tensor_arena, TENSOR_ARENA_SIZE);
   pnet_1_interpreter = &static_pnet_1_interpreter;
 
   static tflite::MicroInterpreter static_pnet_2_interpreter(
-  		pnet_2_model, micro_op_resolver, tensor_arena, TENSOR_ARENA_SIZE, error_reporter);
+  		pnet_2_model, micro_op_resolver, tensor_arena, TENSOR_ARENA_SIZE);
   pnet_2_interpreter = &static_pnet_2_interpreter;
 
   static tflite::MicroInterpreter static_pnet_3_interpreter(
-    		pnet_3_model, micro_op_resolver, tensor_arena, TENSOR_ARENA_SIZE, error_reporter);
+    		pnet_3_model, micro_op_resolver, tensor_arena, TENSOR_ARENA_SIZE);
     pnet_3_interpreter = &static_pnet_3_interpreter;
 
   static tflite::MicroInterpreter static_rnet_interpreter(
-  		rnet_model, micro_op_resolver, tensor_arena, TENSOR_ARENA_SIZE, error_reporter);
+  		rnet_model, micro_op_resolver, tensor_arena, TENSOR_ARENA_SIZE);
   rnet_interpreter = &static_rnet_interpreter;
 
   static tflite::MicroInterpreter static_onet_interpreter(
-  		onet_model, micro_op_resolver, tensor_arena, TENSOR_ARENA_SIZE, error_reporter);
+  		onet_model, micro_op_resolver, tensor_arena, TENSOR_ARENA_SIZE);
   onet_interpreter = &static_onet_interpreter;
 
   /* Allocate memory from the tensor_arena for the model's tensors */
   TfLiteStatus allocate_status = pnet_1_interpreter->AllocateTensors();
   if (allocate_status != kTfLiteOk) {
-    TF_LITE_REPORT_ERROR(error_reporter, "AllocateTensors() failed");
+    MicroPrintf("AllocateTensors() failed");
     return;
   }
 
   allocate_status = pnet_2_interpreter->AllocateTensors();
   if (allocate_status != kTfLiteOk) {
-    TF_LITE_REPORT_ERROR(error_reporter, "AllocateTensors() failed");
+    MicroPrintf("AllocateTensors() failed");
     return;
   }
 
   allocate_status = pnet_3_interpreter->AllocateTensors();
 	if (allocate_status != kTfLiteOk) {
-		TF_LITE_REPORT_ERROR(error_reporter, "AllocateTensors() failed");
+    MicroPrintf("AllocateTensors() failed");
 		return;
 	}
 
   allocate_status = rnet_interpreter->AllocateTensors();
   if (allocate_status != kTfLiteOk) {
-    TF_LITE_REPORT_ERROR(error_reporter, "AllocateTensors() failed");
+  	MicroPrintf("AllocateTensors() failed");
     return;
   }
 
   allocate_status = onet_interpreter->AllocateTensors();
   if (allocate_status != kTfLiteOk) {
-    TF_LITE_REPORT_ERROR(error_reporter, "AllocateTensors() failed");
+  	MicroPrintf("AllocateTensors() failed");
     return;
   }
 }
