@@ -55,11 +55,11 @@ extern "C" {
 #define RNET_SIZE				24
 #define ONET_SIZE				48
 
-#define PNET_THRESHOLD  0.7
+#define PNET_THRESHOLD  0.5
 #define RNET_THRESHOLD  0.7
-#define ONET_THRESHOLD  0.75
+#define ONET_THRESHOLD  0.8
 
-#define NMS_THRESHOLD   0.5
+#define NMS_THRESHOLD   0.35
 
 #define IMG_MIN(A, B) ((A) < (B) ? (A) : (B))
 #define IMG_MAX(A, B) ((A) < (B) ? (B) : (A))
