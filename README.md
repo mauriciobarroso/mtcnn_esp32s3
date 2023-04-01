@@ -1,4 +1,4 @@
-# TensorFlow Lite Micro MTCNN implementation for ESP32-S3
+# Implementation of MTCNN in TensorFlow Lite Micro for ESP32-S3
 This is an implementation of MTCNN (Multitask Cascading Convolutional Networks) for the ESP32-S3 SoC (System on Chip) using TensorFlow Lite for Microcontrollers. The main goal is to detect faces in low-cost hardware and reduced technical features.
 
 ## MTCNN
