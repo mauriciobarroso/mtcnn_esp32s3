@@ -52,7 +52,6 @@
 #include "esp_event.h"
 #include "nvs_flash.h"
 #include "esp_spiffs.h"
-#include "esp_smartconfig.h"
 #include "file_server.c"
 
 #include "utils.h"
@@ -92,8 +91,6 @@ static esp_err_t camera_init(void);
 static void wifi_event_handler(void * arg, esp_event_base_t event_base,
 		int32_t event_id, void * event_data);
 static void ip_event_handler(void * arg, esp_event_base_t event_base,
-		int32_t event_id, void * event_data);
-static void sc_event_handler(void * arg, esp_event_base_t event_base,
 		int32_t event_id, void * event_data);
 
 static void tflm_init(void);
@@ -153,7 +150,7 @@ static esp_err_t nvs_init(void) {
 }
 
 static esp_err_t wifi_init(void) {
-	esp_err_t ret;
+	esp_err_t ret = ESP_OK;
 
 	ESP_LOGI(TAG, "Initializing Wi-Fi...");
 
@@ -181,7 +178,6 @@ static esp_err_t wifi_init(void) {
 	/* Declare event handler instances for Wi-Fi and IP */
 	esp_event_handler_instance_t instance_any_wifi;
 	esp_event_handler_instance_t instance_got_ip;
-	esp_event_handler_instance_t instance_got_sc;
 
 	/* Register Wi-Fi, IP and SmartConfig event handlers */
 	ret = esp_event_handler_instance_register(WIFI_EVENT,
@@ -204,23 +200,12 @@ static esp_err_t wifi_init(void) {
 		return ret;
 	}
 
-	ret = esp_event_handler_instance_register(SC_EVENT,
-			ESP_EVENT_ANY_ID,
-			&sc_event_handler,
-			NULL,
-			&instance_got_sc);
-
-	if (ret != ESP_OK) {
-		return ret;
-	}
-
 	/* Set Wi-Fi mode */
 	ret = esp_wifi_set_mode(WIFI_MODE_STA);
 
 	if (ret != ESP_OK) {
 		return ret;
 	}
-
 
 	/* Start Wi-Fi */
 	ret = esp_wifi_start();
@@ -229,37 +214,28 @@ static esp_err_t wifi_init(void) {
 		return ret;
 	}
 
-	/* Check if are Wi-Fi credentials provisioned */
-	wifi_config_t wifi_conf;
-	ret = esp_wifi_get_config(WIFI_IF_STA, &wifi_conf);
+	/* Try to connect with the current credentials */
+  wifi_config_t wifi_cfg = {
+      .sta = {
+          .ssid = CONFIG_WIFI_STA_SSID,
+          .password = CONFIG_WIFI_STA_PASS,
+      },
+  };
 
-	if (ret == ESP_OK) {
-		if (strlen((char *)wifi_conf.sta.ssid) > 0) {
-			ESP_LOGI(TAG, "Found Wi-Fi credentials in NVS");
-			ESP_LOGI(TAG, "SSID: %s", wifi_conf.sta.ssid);
-			ESP_LOGI(TAG, "Password: %s", wifi_conf.sta.password);
+	ESP_LOGI(TAG, "Connecting to %s...", wifi_cfg.sta.ssid);
 
-			ESP_LOGI(TAG, "Connecting...");
-			esp_wifi_set_config(WIFI_IF_STA, &wifi_conf);
-			esp_wifi_connect();
-		}
+	ret = esp_wifi_set_config(WIFI_IF_STA, &wifi_cfg);
 
-		else {
-			ESP_LOGI(TAG, "Not found Wi-Fi credentials in NVS. Starting SmartConfig...");
+	if (ret != ESP_OK) {
+		ESP_LOGE(TAG, "Error setting the statation configuration");
+		return ret;
+	}
 
-			ret = esp_smartconfig_set_type(SC_TYPE_ESPTOUCH);
+	ret = esp_wifi_connect();
 
-			if (ret != ESP_OK) {
-				return ret;
-			}
-
-			smartconfig_start_config_t sc_config = SMARTCONFIG_START_CONFIG_DEFAULT();
-			ret = esp_smartconfig_start(&sc_config);
-
-			if (ret != ESP_OK) {
-				return ret;
-			}
-		}
+	if (ret != ESP_OK) {
+		ESP_LOGE(TAG, "Error connecting to %s", wifi_cfg.sta.ssid);
+		return ret;
 	}
 
 	return ret;
@@ -505,8 +481,6 @@ static void inference_task(void * arg) {
 	  correct_boxes(pnet_bboxes, IMG_W, IMG_H);
 
 	  long long pnet_time = (esp_timer_get_time() - start_time);
-	  printf("Time for P-Net = %lld\n", pnet_time / 1000);
-	  printf("Ouput bboxes:%d\n", pnet_bboxes->len);
 
 	  /* Run R-Net */
 	  start_time = esp_timer_get_time();
@@ -516,8 +490,6 @@ static void inference_task(void * arg) {
 	  rnet_candidate_windows.len = 0;
 
 	  run_rnet(&rnet_candidate_windows, rnet_interpreter, rgb888_image, IMG_W, IMG_H, pnet_bboxes);
-	  free(pnet_bboxes->bbox);
-	  free(pnet_bboxes);
 	  nms(&rnet_candidate_windows, NMS_THRESHOLD, IOU_MODE);
 
 	  bboxes_t * rnet_bboxes;
@@ -528,8 +500,6 @@ static void inference_task(void * arg) {
 	  correct_boxes(rnet_bboxes, IMG_W, IMG_H);
 
 	  long long rnet_time = (esp_timer_get_time() - start_time);
-		printf("Time for R-Net = %lld\n", rnet_time / 1000);
-		printf("Ouput bboxes:%d\n", rnet_bboxes->len);
 
 	  /* Run O-Net */
 	  start_time = esp_timer_get_time();
@@ -539,8 +509,6 @@ static void inference_task(void * arg) {
 	  onet_candidate_windows.len = 0;
 
 	  run_onet(&onet_candidate_windows, onet_interpreter, rgb888_image, IMG_W, IMG_H, rnet_bboxes);
-	  free(rnet_bboxes->bbox);
-	  free(rnet_bboxes);
 	  nms(&onet_candidate_windows, NMS_THRESHOLD, IOU_MODE);
 
 	  bboxes_t * onet_bboxes;
@@ -551,35 +519,43 @@ static void inference_task(void * arg) {
 	  correct_boxes(onet_bboxes, IMG_W, IMG_H);
 
 	  long long onet_time = (esp_timer_get_time() - start_time);
-		printf("Time for O-Net = %lld\n", onet_time / 1000);
-		printf("Ouput bboxes:%d\n", onet_bboxes->len);
 
-
-		/* Print final results */
 		if (onet_bboxes->len > 0) {
-			draw_rectangle_rgb888(rgb888_image, onet_bboxes, IMG_W);
-			print_rgb888(rgb888_image, IMG_W, IMG_H);
+			/* Print MTCNN times and bboxes */
+		  printf("P-Net time : %lld, bboxes : %d\n", pnet_time / 1000, pnet_bboxes->len);
+		  printf("R-Net time : %lld, bboxes : %d\n", rnet_time / 1000, rnet_bboxes->len);
+		  printf("O-Net time : %lld, bboxes : %d\n", onet_time / 1000, onet_bboxes->len);
+			printf("MTCNN time : %lld, bboxes : %d\r\n", (pnet_time + rnet_time + onet_time) / 1000, onet_bboxes->len);
 
 			/* Open file */
 			FILE * f = fopen("/spiffs/faces.jpg", "wb");
 			size_t cnv_buf_len;
 			uint8_t * cnv_buf = NULL;
 
-			fmt2jpg(rgb888_image, 96 * 96, 96, 96, PIXFORMAT_RGB888, 80, &cnv_buf, &cnv_buf_len);
-
+			/* Draw bboxes and save the file */
+			draw_rectangle_rgb888(rgb888_image, onet_bboxes, IMG_W);
+			fmt2jpg(rgb888_image, IMG_W * IMG_H, IMG_W, IMG_H, PIXFORMAT_RGB888, 80, &cnv_buf, &cnv_buf_len);
 			fwrite(cnv_buf, cnv_buf_len, 1, f);
+
+			/* Close and free */
 			fclose(f);
 			free(cnv_buf);
 		}
 
+		/* Free all the bboxes */
+	  free(pnet_bboxes->bbox);
+	  free(pnet_bboxes);
+	  free(rnet_bboxes->bbox);
+	  free(rnet_bboxes);
 	  free(onet_bboxes->bbox);
 	  free(onet_bboxes);
-
-	  printf("MTCNN time = %lld\n\n", (pnet_time + rnet_time + onet_time) / 1000);
-
 	  free(rgb888_image);
+
+	  /* Return the cammera frame buffer */
 	  esp_camera_fb_return(fb);
-	  vTaskDelay(pdMS_TO_TICKS(20)); /* To avoid watchdog */
+
+	  /* To avoid watchdog */
+	  vTaskDelay(pdMS_TO_TICKS(20));
 	}
 }
 
@@ -625,51 +601,6 @@ static void ip_event_handler(void * arg, esp_event_base_t event_base,
 
 			break;
 		}
-	}
-}
-
-static void sc_event_handler(void * arg, esp_event_base_t event_base,
-		int32_t event_id, void * event_data) {
-	switch (event_id) {
-		case SC_EVENT_GOT_SSID_PSWD: {
-			ESP_LOGI(TAG, "SC_EVENT_GOT_SSID_PSWD");
-
-			smartconfig_event_got_ssid_pswd_t * evt = (smartconfig_event_got_ssid_pswd_t *)event_data;
-			wifi_config_t wifi_config;
-
-			/* Copy obtained Wi-Fi credentials in Wi-Fi configurarion variable */
-			bzero(&wifi_config, sizeof(wifi_config_t));
-			memcpy(wifi_config.sta.ssid, evt->ssid, sizeof(wifi_config.sta.ssid));
-			memcpy(wifi_config.sta.password, evt->password, sizeof(wifi_config.sta.password));
-			wifi_config.sta.bssid_set = evt->bssid_set;
-
-			if (wifi_config.sta.bssid_set == true) {
-					memcpy(wifi_config.sta.bssid, evt->bssid, sizeof(wifi_config.sta.bssid));
-			}
-
-			/* Print Wi-Fi credentials */
-			ESP_LOGI(TAG, "SSID: %s", wifi_config.sta.ssid);
-			ESP_LOGI(TAG, "Password: %s", wifi_config.sta.password);
-
-			/* Configure Wi-Fi and try to connect */
-			ESP_ERROR_CHECK(esp_wifi_disconnect());
-			ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
-			esp_wifi_connect();
-
-			break;
-		}
-		case SC_EVENT_SEND_ACK_DONE: {
-			ESP_LOGI(TAG, "SC_EVENT_SEND_ACK_DONE");
-
-			esp_smartconfig_stop();
-
-			break;
-		}
-
-		default:
-			ESP_LOGI(TAG, "Other SmartConfig event");
-
-			break;
 	}
 }
 
