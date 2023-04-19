@@ -1,6 +1,18 @@
-menu  "App Configuration"
-menu "Camera Configuration"
+menu "App Configuration"
 
+menu "Wi-Fi Configuration"
+config WIFI_STA_SSID
+	string "Wi-Fi station SSID" 
+	help
+		SSID to connect in station mode.
+
+config WIFI_STA_PASS
+	string "Wi-Fi station password" 
+	help
+		Password of the SSID to connect in station mode.
+endmenu
+
+menu "Camera Configuration"
 config CAMERA_PIN_PWDN
     int "Power Down pin"
     range -1 33
