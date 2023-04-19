@@ -238,7 +238,7 @@ MTCNN time : 1088, bboxes : 3
 To observe the image captured by the camera and processed by MTCNN, you must access the following link http://ip_address/faces.jpg, where "ip_address" must be replaced by the IP address assigned to the device. It should show a result like this.
 
 <p align="center">
-  <img src="images/output_faces.jpg" alt="Output faces" width="40%"/>
+  <img src="images/output_faces.jpg" alt="Output faces" width="200%"/>
 </p>
 
 ## Credits
